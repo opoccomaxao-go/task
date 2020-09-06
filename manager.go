@@ -1,19 +1,32 @@
 package task
 
 import (
+	"reflect"
 	"sync"
 )
 
 type Manager struct {
 	mu        sync.RWMutex
-	queue     chan Task
+	queue     []chan Action
+	cases     []reflect.SelectCase
 	taskStore map[string]Task
 	canStart  bool
 }
 
 func NewManager() *Manager {
+	queue := make([]chan Action, total)
+	cases := make([]reflect.SelectCase, total)
+	for i := total - 1; i >= 0; i-- {
+		ch := make(chan Action, 10)
+		queue[i] = ch
+		cases[i] = reflect.SelectCase{
+			Dir:  reflect.SelectRecv,
+			Chan: reflect.ValueOf(ch),
+		}
+	}
 	return &Manager{
-		queue:     make(chan Task, 100),
+		queue:     queue,
+		cases:     cases,
 		taskStore: map[string]Task{},
 		canStart:  true,
 	}
@@ -28,7 +41,7 @@ func (m *Manager) Register(name string, task Task) *Manager {
 
 func (m *Manager) scheduleTask(task Task) {
 	go func() {
-		m.queue <- task
+		m.queue[task.priority] <- task.Action
 	}()
 }
 
@@ -46,10 +59,18 @@ func (m *Manager) ScheduleTask(task Task) *Manager {
 	m.scheduleTask(task)
 	return m
 }
+func (m *Manager) ScheduleAction(action Action) *Manager {
+	m.scheduleTask(Task{
+		Action:   action,
+		priority: idle,
+	})
+	return m
+}
 
 func (m *Manager) loop() {
-	for task := range m.queue {
-		task()
+	for {
+		_, task, _ := reflect.Select(m.cases)
+		task.Interface().(Action)()
 	}
 }
 
