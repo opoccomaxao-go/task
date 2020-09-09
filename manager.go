@@ -14,10 +14,17 @@ type Manager struct {
 }
 
 func NewManager() *Manager {
+	return NewManagerCap(10)
+}
+
+func NewManagerCap(capacity int) *Manager {
 	queue := make([]chan Action, total)
 	cases := make([]reflect.SelectCase, total)
+	if capacity < 1 {
+		capacity = 1
+	}
 	for i := total - 1; i >= 0; i-- {
-		ch := make(chan Action, 10)
+		ch := make(chan Action, capacity)
 		queue[i] = ch
 		cases[i] = reflect.SelectCase{
 			Dir:  reflect.SelectRecv,
