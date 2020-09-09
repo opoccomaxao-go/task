@@ -1,41 +1,25 @@
 package task
 
 import (
-	"reflect"
 	"sync"
 )
 
 type Manager struct {
 	mu        sync.RWMutex
-	queue     []chan Action
-	cases     []reflect.SelectCase
+	run       sync.Mutex
+	queue     []queue
 	taskStore map[string]Task
-	canStart  bool
+	running   bool
 }
 
 func NewManager() *Manager {
-	return NewManagerCap(10)
-}
-
-func NewManagerCap(capacity int) *Manager {
-	queue := make([]chan Action, total)
-	cases := make([]reflect.SelectCase, total)
-	if capacity < 1 {
-		capacity = 1
-	}
-	for i := total - 1; i >= 0; i-- {
-		ch := make(chan Action, capacity)
-		queue[i] = ch
-		cases[i] = reflect.SelectCase{
-			Dir:  reflect.SelectRecv,
-			Chan: reflect.ValueOf(ch),
-		}
+	queues := make([]queue, total)
+	for i := maxPriority; i >= 0; i-- {
+		queues[i] = queue{}
 	}
 	return &Manager{
-		queue:     queue,
-		cases:     cases,
+		queue:     queues,
 		taskStore: map[string]Task{},
-		canStart:  true,
 	}
 }
 
@@ -47,9 +31,20 @@ func (m *Manager) Register(name string, task Task) *Manager {
 }
 
 func (m *Manager) scheduleTask(task Task) {
-	go func() {
-		m.queue[task.priority] <- task.Action
-	}()
+	m.mu.Lock()
+	m.queue[task.priority].Enqueue(task.Action)
+	m.mu.Unlock()
+	go m.next()
+}
+
+func (m *Manager) getNextAction() Action {
+	var task Action
+	m.mu.Lock()
+	for i := maxPriority; i >= 0 && task == nil; i-- {
+		task = m.queue[i].Dequeue()
+	}
+	m.mu.Unlock()
+	return task
 }
 
 func (m *Manager) Schedule(name string) *Manager {
@@ -66,6 +61,7 @@ func (m *Manager) ScheduleTask(task Task) *Manager {
 	m.scheduleTask(task)
 	return m
 }
+
 func (m *Manager) ScheduleAction(action Action) *Manager {
 	m.scheduleTask(Task{
 		Action:   action,
@@ -74,18 +70,19 @@ func (m *Manager) ScheduleAction(action Action) *Manager {
 	return m
 }
 
-func (m *Manager) loop() {
+func (m *Manager) next() {
+	if m.running {
+		return
+	}
+	m.run.Lock()
+	m.running = true
 	for {
-		_, task, _ := reflect.Select(m.cases)
-		task.Interface().(Action)()
+		task := m.getNextAction()
+		if task == nil {
+			m.running = false
+			m.run.Unlock()
+			return
+		}
+		task()
 	}
-}
-
-func (m *Manager) Start() {
-	m.mu.Lock()
-	if m.canStart {
-		m.canStart = false
-		go m.loop()
-	}
-	m.mu.Unlock()
 }

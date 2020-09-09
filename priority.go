@@ -10,3 +10,5 @@ const (
 	realtime
 	total
 )
+
+const maxPriority = total - 1
