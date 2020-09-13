@@ -9,7 +9,8 @@ type Manager struct {
 	run       sync.Mutex
 	queue     []queue
 	taskStore map[string]Task
-	running   bool
+	active    int32
+	play      chan struct{}
 }
 
 func NewManager() *Manager {
@@ -17,10 +18,11 @@ func NewManager() *Manager {
 	for i := maxPriority; i >= 0; i-- {
 		queues[i] = queue{}
 	}
-	return &Manager{
+	return (&Manager{
 		queue:     queues,
 		taskStore: map[string]Task{},
-	}
+		play:      make(chan struct{}),
+	}).init()
 }
 
 func (m *Manager) Register(name string, task Task) *Manager {
@@ -71,18 +73,27 @@ func (m *Manager) ScheduleAction(action Action) *Manager {
 }
 
 func (m *Manager) next() {
-	m.run.Lock()
-	defer m.run.Unlock()
-	if m.running {
-		return
-	}
-	m.running = true
+	m.play <- struct{}{}
+}
+
+func (m *Manager) processTasks() {
 	for {
-		task := m.getNextAction()
-		if task == nil {
-			m.running = false
+		if task := m.getNextAction(); task != nil {
+			task()
+		} else {
 			return
 		}
-		task()
 	}
+}
+
+func (m *Manager) loop() {
+	for {
+		m.processTasks()
+		<-m.play
+	}
+}
+
+func (m *Manager) init() *Manager {
+	go m.loop()
+	return m
 }

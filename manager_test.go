@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"reflect"
 	"sync"
-	"sync/atomic"
 	"testing"
 )
 
@@ -17,17 +16,17 @@ func TestManager(t *testing.T) {
 	m.
 		Register("task1", Low(func() {
 			fmt.Println("task1")
-			atomic.AddInt64(&res[1], 1)
+			res[1]++
 			go m.Schedule("finish")
 		})).
 		Register("task2", Medium(func() {
 			fmt.Println("task2")
-			atomic.AddInt64(&res[2], 1)
+			res[2]++
 			go m.Schedule("task1")
 		})).
 		Register("task3", High(func() {
 			fmt.Println("task3")
-			atomic.AddInt64(&res[3], 1)
+			res[3]++
 			go m.Schedule("task1").Schedule("task2")
 		})).
 		Register("finish", Idle(func() {
@@ -38,12 +37,12 @@ func TestManager(t *testing.T) {
 	m.
 		ScheduleAction(func() {
 			fmt.Println("task0")
-			atomic.AddInt64(&res[0], 1)
+			res[0]++
 			go m.Schedule("task3")
 		}).
 		ScheduleTask(Realtime(func() {
 			fmt.Println("task4")
-			atomic.AddInt64(&res[4], 1)
+			res[4]++
 			m.Schedule("task3")
 		})).
 		Schedule("finish")
