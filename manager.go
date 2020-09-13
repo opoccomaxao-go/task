@@ -71,16 +71,16 @@ func (m *Manager) ScheduleAction(action Action) *Manager {
 }
 
 func (m *Manager) next() {
+	m.run.Lock()
+	defer m.run.Unlock()
 	if m.running {
 		return
 	}
-	m.run.Lock()
 	m.running = true
 	for {
 		task := m.getNextAction()
 		if task == nil {
 			m.running = false
-			m.run.Unlock()
 			return
 		}
 		task()
