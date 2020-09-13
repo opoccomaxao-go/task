@@ -2,6 +2,7 @@ package task
 
 import (
 	"sync"
+	"sync/atomic"
 )
 
 type Manager struct {
@@ -9,7 +10,7 @@ type Manager struct {
 	run       sync.Mutex
 	queue     []queue
 	taskStore map[string]Task
-	running   bool
+	active    int32
 }
 
 func NewManager() *Manager {
@@ -71,16 +72,13 @@ func (m *Manager) ScheduleAction(action Action) *Manager {
 }
 
 func (m *Manager) next() {
-	m.run.Lock()
-	defer m.run.Unlock()
-	if m.running {
+	defer atomic.AddInt32(&m.active, -1)
+	if atomic.AddInt32(&m.active, 1) > 1 {
 		return
 	}
-	m.running = true
 	for {
 		task := m.getNextAction()
 		if task == nil {
-			m.running = false
 			return
 		}
 		task()
