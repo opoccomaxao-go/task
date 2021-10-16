@@ -6,10 +6,8 @@ import (
 
 type Manager struct {
 	mu        sync.RWMutex
-	run       sync.Mutex
 	queue     []queue
 	taskStore map[string]Task
-	active    int32
 	play      chan struct{}
 }
 

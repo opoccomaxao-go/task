@@ -1,13 +1,15 @@
 package task
 
 import (
-	"reflect"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestQueue(t *testing.T) {
 	var res []int
 	q := new(queue)
+
 	q.Enqueue(func() {
 		res = append(res, 3)
 	})
@@ -17,6 +19,7 @@ func TestQueue(t *testing.T) {
 	q.Enqueue(func() {
 		res = append(res, 2)
 	})
+
 	for {
 		act := q.Dequeue()
 		if act == nil {
@@ -25,8 +28,6 @@ func TestQueue(t *testing.T) {
 			act()
 		}
 	}
-	needRes := []int{3, 1, 2}
-	if !reflect.DeepEqual(needRes, res) {
-		t.Errorf("Incorrect call order. Want %v, got %v", needRes, res)
-	}
+
+	assert.Equal(t, []int{3, 1, 2}, res, "Call order")
 }
